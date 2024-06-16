@@ -16,7 +16,9 @@ class _BaseEntity:
         self._spec = spec
         pass
 
-    def __call__(self, method: str, url: str , **kwds: Any) -> Optional[requests.Response]:
+    def __call__(
+        self, method: str, url: str, **kwds: Any
+    ) -> Optional[requests.Response]:
         raise NotImplementedError
 
     def _validate_call(self, method: str, url: str, **kwds: Any) -> bool:
@@ -32,7 +34,9 @@ class OAPISpec(_BaseEntity):
 
         self._servers = [i.url for i in spec.servers]
 
-    def _compare_and_parse_paths(self, p_requested: str, p_internal: str) -> Optional[dict[str, str]]:
+    def _compare_and_parse_paths(
+        self, p_requested: str, p_internal: str
+    ) -> Optional[dict[str, str]]:
         split_requested_path = p_requested.split("/")
         split_internal_path = p_internal.split("/")
 
@@ -43,7 +47,9 @@ class OAPISpec(_BaseEntity):
 
         for i in range(len(split_requested_path)):
             if split_requested_path[i] != split_internal_path[i]:
-                if split_internal_path[i].startswith("{") and split_internal_path[i].endswith("}"):
+                if split_internal_path[i].startswith("{") and split_internal_path[
+                    i
+                ].endswith("}"):
                     param_name = split_internal_path[i][1:-1]
                     result[param_name] = split_requested_path[i]
                     continue
@@ -55,7 +61,7 @@ class OAPISpec(_BaseEntity):
         res = []
         for serv_url in self._servers:
             if url.startswith(serv_url):
-                res.append(url[len(serv_url):])
+                res.append(url[len(serv_url) :])
         return res
 
     def _get_valid_paths(self, url: str) -> list[str]:
@@ -80,7 +86,9 @@ class OAPISpec(_BaseEntity):
 
         return True
 
-    def __call__(self, method: str, url: str, **kwds: Any) -> Optional[requests.Response]:
+    def __call__(
+        self, method: str, url: str, **kwds: Any
+    ) -> Optional[requests.Response]:
         if not self._validate_call(method, url, **kwds):
             return None
 
@@ -108,12 +116,14 @@ class Path(_BaseEntity):
         self._ops = {}
         for item in spec.operations:
             if item.method == specification.OperationMethod.GET:
-                self._ops['get'] = Get(item)
+                self._ops["get"] = Get(item)
 
     def _validate_call(self, method: str, url: str, **kwds: Any) -> bool:
         return method in self._ops
 
-    def __call__(self, method: str, url: str, **kwds: Any) -> Optional[requests.Response]:
+    def __call__(
+        self, method: str, url: str, **kwds: Any
+    ) -> Optional[requests.Response]:
         if self._validate_call(method, url, **kwds):
             return self._ops[method](method, url, **kwds)
 
@@ -129,8 +139,13 @@ class Get(_BaseEntity):
         self._parameters = {}
         self._required = set()
         for param in spec.parameters:
-            if param.location in {specification.ParameterLocation.QUERY, specification.ParameterLocation.PATH}:
-                self._parameters[param.name] = SCHEMA_MAP[type(param.schema)](param.schema)
+            if param.location in {
+                specification.ParameterLocation.QUERY,
+                specification.ParameterLocation.PATH,
+            }:
+                self._parameters[param.name] = SCHEMA_MAP[type(param.schema)](
+                    param.schema
+                )
                 if param.required:
                     self._required.add(param.name)
 
@@ -155,7 +170,7 @@ class Get(_BaseEntity):
 
         query_params = dict(urllib.parse.parse_qsl(parsed_url.query))
 
-        query_params.update(kwds.get('path_params', {}))
+        query_params.update(kwds.get("path_params", {}))
 
         if self._required & set(query_params.keys()) != self._required:
             return False
@@ -167,7 +182,9 @@ class Get(_BaseEntity):
 
         return True
 
-    def __call__(self, method: str, url: str, **kwds: Any) -> Optional[requests.Response]:
+    def __call__(
+        self, method: str, url: str, **kwds: Any
+    ) -> Optional[requests.Response]:
         # TODO send a default response if whatever goes wrong, and a random other if anything is ok
         if self._validate_call(method, url, **kwds):
             return random.choice(self._responses)(method, url, **kwds)
@@ -179,7 +196,9 @@ class JSONResponse(_BaseEntity):
     def __init__(self, spec: specification.Response) -> None:
         super().__init__(spec)
 
-    def __call__(self, method: str, url: str, **kwds: Any) -> Optional[requests.Response]:
+    def __call__(
+        self, method: str, url: str, **kwds: Any
+    ) -> Optional[requests.Response]:
         res = requests.Response()
         res.status_code = self._spec.code or http.HTTPStatus.NOT_FOUND.value
 
@@ -193,6 +212,8 @@ class JSONResponse(_BaseEntity):
 
         for header in self._spec.headers:
             if random.choice([True, header.required]):
-                res.headers[header.name] = SCHEMA_MAP[type(header.schema)](header.schema)()
+                res.headers[header.name] = SCHEMA_MAP[type(header.schema)](
+                    header.schema
+                )()
 
         return res

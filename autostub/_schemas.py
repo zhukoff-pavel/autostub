@@ -71,14 +71,14 @@ class String(GeneratableEntity):
 
     def __call__(self, *args: Any, **kwds: Any) -> string:
         # TODO support formats
-        allowed_letters = string.ascii_letters + string.digits + ' '
-        return ''.join(
+        allowed_letters = string.ascii_letters + string.digits + " "
+        return "".join(
             random.choices(
                 allowed_letters,
                 k=random.randint(
                     self._lower_bound,
                     self._upper_bound,
-                )
+                ),
             )
         )
 
@@ -108,7 +108,8 @@ class Null(GeneratableEntity):
 class Array(GeneratableEntity):
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         return [
-            SCHEMA_MAP[type(self._spec.items)](self._spec.items)() for i in range(
+            SCHEMA_MAP[type(self._spec.items)](self._spec.items)()
+            for i in range(
                 random.randint(
                     self._spec.min_items or 0,
                     self._spec.max_items or 100,
@@ -161,9 +162,7 @@ class AnyOf(GeneratableEntity):
         super().__init__(spec)
         self._available_schemas = []
         for schema in self._spec.schemas:
-            self._available_schemas.append(
-                SCHEMA_MAP[type(schema)](schema)
-            )
+            self._available_schemas.append(SCHEMA_MAP[type(schema)](schema))
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         schema = random.choice(self._available_schemas)
@@ -187,5 +186,5 @@ SCHEMA_MAP = {
     spec.Array: Array,
     spec.Object: Object,
     spec.OneOf: OneOf,
-    spec.AnyOf: AnyOf
+    spec.AnyOf: AnyOf,
 }
