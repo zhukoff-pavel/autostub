@@ -1,6 +1,4 @@
 from typing import Any, Optional
-import io
-import json
 import random
 import urllib.parse
 
@@ -9,6 +7,7 @@ import http
 import openapi_parser.specification as specification
 
 from autostub._schemas import SCHEMA_MAP
+from autostub._response import JsonHTTPResponse
 
 
 class _BaseEntity:
@@ -88,7 +87,7 @@ class OAPISpec(_BaseEntity):
 
     def __call__(
         self, method: str, url: str, **kwds: Any
-    ) -> Optional[requests.Response]:
+    ) -> JsonHTTPResponse | None:
         if not self._validate_call(method, url, **kwds):
             return None
 
@@ -184,7 +183,7 @@ class Get(_BaseEntity):
 
     def __call__(
         self, method: str, url: str, **kwds: Any
-    ) -> Optional[requests.Response]:
+    ) -> JsonHTTPResponse:
         # TODO send a default response if whatever goes wrong, and a random other if anything is ok
         if self._validate_call(method, url, **kwds):
             return random.choice(self._responses)(method, url, **kwds)
@@ -198,8 +197,8 @@ class JSONResponse(_BaseEntity):
 
     def __call__(
         self, method: str, url: str, **kwds: Any
-    ) -> Optional[requests.Response]:
-        res = requests.Response()
+    ) -> JsonHTTPResponse:
+        res = JsonHTTPResponse()
         res.status_code = self._spec.code or http.HTTPStatus.NOT_FOUND.value
 
         cont = self._spec.content[0]
@@ -208,7 +207,7 @@ class JSONResponse(_BaseEntity):
 
         data = SCHEMA_MAP[type(cont.schema)](cont.schema)()
 
-        res.raw = io.BytesIO(json.dumps(data).encode())
+        res.content = data
 
         for header in self._spec.headers:
             if random.choice([True, header.required]):
