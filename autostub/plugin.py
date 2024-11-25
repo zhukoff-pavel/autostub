@@ -1,48 +1,70 @@
-from typing import Any
+from typing import Any, Callable
+import importlib
+import collections
+
 from autostub._generator import OAPISpec
 import openapi_parser as oapi_parser
 
-import requests
 import pytest
 import pytest_mock
 
 
+SUPPORTED_MODULES = {
+    "requests": "autostub.adapters.requests"
+}
+
+
 class AutoStub:
     def __init__(self, config: Any) -> None:
-        self._servers = {}
+        self._servers: collections.defaultdict[str, dict[str, OAPISpec]] = collections.defaultdict(dict)
         self._config = config
-        self._mock = None
+        self._mock: dict[str, pytest_mock.MockType | None] = {}
         self._mocker = pytest_mock.MockFixture(self._config)
 
-    def request(self, *args, **kwargs):
-        r = None
-        for s in self._servers.values():
-            r = s(*args, **kwargs)
-            if r is not None:
-                return r
+        self.adapters_map = self._get_adapter_map()
 
-        return requests.request(*args, **kwargs)
+    @staticmethod
+    def _get_adapter_map():
+        a_map = {}
+        for m_name, path in SUPPORTED_MODULES.items():
+            try:
+                module = importlib.import_module(path)
+                adapter = getattr(module, 'ADAPTER_MAP')
+            except ImportError:
+                continue
+            else:
+                a_map[m_name] = adapter
+        return a_map
 
-    def _stop_mock_if_needed(self):
-        if self._mock is not None:
-            self._mocker.stop(self._mock)
-            self._mock = None
+    def _stop_mock_if_needed(self, module):
+        if self._mock[module] is not None:
+            self._mocker.stop(self._mock[module])
+            self._mock[module] = None
 
-    def _create_mock(self):
-        self._stop_mock_if_needed()
-        self._mock = self._mocker.patch("requests.api.request", new=self.request)
+    def _generate_mock(self, module, source_mock):
+        def func(*args, **kwargs):
+            return source_mock(self._servers[module], *args, **kwargs)
+
+        return func
+
+    def _create_mock(self, module: str | None = None):
+        self._stop_mock_if_needed(module)
+        if module:
+            replace_name = self.adapters_map[module]['replace_name']
+            replace_with = self._generate_mock(module, self.adapters_map[module]['replace_with'])
+            self._mock[module] = self._mocker.patch(replace_name, new=replace_with)
         return self._mock
 
-    def stub(self, oapi_spec: str) -> None:
+    def stub(self, oapi_spec: str, module: str):
         """
         Generate requests.get stub and patch the function
         """
-        self._servers[oapi_spec] = OAPISpec(oapi_parser.parse(oapi_spec))
-        return self._create_mock()
+        self._servers[module][oapi_spec] = OAPISpec(oapi_parser.parse(oapi_spec))
+        return self._create_mock(module)
 
-    def unstub(self, oapi_spec: str):
-        self._servers.pop(oapi_spec, None)
-        return self._create_mock()
+    def unstub(self, oapi_spec: str, module):
+        self._servers[module].pop(oapi_spec, None)
+        return self._create_mock(module)
 
     def stop(self):
         self._mocker.stopall()

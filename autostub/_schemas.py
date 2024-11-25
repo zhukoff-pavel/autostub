@@ -49,7 +49,7 @@ class Integer(GeneratableEntity):
 
 
 class Number(Integer):
-    def __call__(self, *args: Any, **kwds: Any) -> int:
+    def __call__(self, *args: Any, **kwds: Any) -> float:
         return random.uniform(
             self._lower_bound,
             self._upper_bound,
@@ -57,10 +57,10 @@ class Number(Integer):
 
     def is_valid(self, item: str) -> bool:
         try:
-            item = float(item)
+            converted = float(item)
         except ValueError:
             return False
-        return self._lower_bound <= item <= self._upper_bound
+        return self._lower_bound <= converted <= self._upper_bound
 
 
 class String(GeneratableEntity):
@@ -69,7 +69,7 @@ class String(GeneratableEntity):
         self._lower_bound = self._spec.min_length or 1
         self._upper_bound = self._spec.max_length or 100
 
-    def __call__(self, *args: Any, **kwds: Any) -> string:
+    def __call__(self, *args: Any, **kwds: Any) -> str:
         # TODO support formats
         allowed_letters = string.ascii_letters + string.digits + " "
         return "".join(
