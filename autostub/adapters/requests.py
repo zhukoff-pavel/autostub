@@ -33,7 +33,7 @@ class RequestsAdapter(BaseAdapter):
         return requests.request(*args, **kwargs)
 
 
-ADAPTER = {
+ADAPTER_MAP = {
     'replace_name': 'requests.api.requests',  # XXX
     'replace_with': RequestsAdapter.mock,
 }
