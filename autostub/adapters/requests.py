@@ -34,6 +34,6 @@ class RequestsAdapter(BaseAdapter):
 
 
 ADAPTER_MAP = {
-    'replace_name': 'requests.api.requests',  # XXX
-    'replace_with': RequestsAdapter.mock,
+    "replace_name": "requests.api.requests",  # XXX
+    "replace_with": RequestsAdapter.mock,
 }

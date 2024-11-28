@@ -124,12 +124,12 @@ class Array(GeneratableEntity):
 class Object(GeneratableEntity):
     def __init__(self, spec: spec.Object) -> NoneType:
         super().__init__(spec)
-        self.properties = {}
+        self.properties: dict[str, Any] = {}
         self.required = set(spec.required)
         for prop in spec.properties:
             self.properties[prop.name] = SCHEMA_MAP[type(prop.schema)](prop.schema)
 
-    def __call__(self, *args: Any, **kwds: Any) -> dict[Any]:
+    def __call__(self, *args: Any, **kwds: Any) -> dict[str, Any]:
         res = {}
 
         for prop in self.properties:
