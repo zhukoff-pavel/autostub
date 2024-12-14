@@ -1,25 +1,47 @@
 from types import NoneType
 from typing import Any
+
+from autostub._request import Request
+from autostub._cache import BaseCache, CompositeCacheKey, NO_CACHE
+
 import openapi_parser.specification as spec
+from frozendict import frozendict
+
+import copy
 import random
 import sys
 import string
 
 
-class GeneratableEntity:
-    def __init__(self, spec: spec.Schema) -> None:
-        self._spec = spec
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        raise NotImplementedError
+class GeneratableEntity:
+    def __init__(self, spec: spec.Schema, name: str | None = None) -> None:
+        self._spec = spec
+        self._cacheable = False
+        self._name = name
+
+    def __call__(self, request: Request, cache: BaseCache) -> Any:
+        if self._cacheable:
+            key = CompositeCacheKey(
+                key=request,
+                model=self._spec
+            )
+            if cache.has(key):
+                return cache.get(key)
+        else:
+            if self._name and self._name in request.query_params:
+                return request.query_params[self._name]
+        return None
 
     def is_valid(self, item: Any) -> bool:
         raise NotImplementedError
 
 
 class Integer(GeneratableEntity):
-    def __init__(self, spec: spec.Integer) -> NoneType:
-        super().__init__(spec)
+    _spec: spec.Integer
+
+    def __init__(self, spec: spec.Integer, name: str | None = None) -> NoneType:
+        super().__init__(spec, name)
         if self._spec.minimum is not None:
             self._lower_bound = self._spec.minimum
         elif self._spec.exclusive_minimum is not None:
@@ -35,6 +57,11 @@ class Integer(GeneratableEntity):
             self._upper_bound = sys.maxsize
 
     def __call__(self, *args: Any, **kwds: Any) -> int:
+        r = super().__call__(*args, **kwds)
+
+        if r:
+            return r
+
         return random.randint(
             self._lower_bound,
             self._upper_bound,
@@ -50,6 +77,11 @@ class Integer(GeneratableEntity):
 
 class Number(Integer):
     def __call__(self, *args: Any, **kwds: Any) -> float:
+        r = super().__call__(*args, **kwds)
+
+        if r:
+            return r
+
         return random.uniform(
             self._lower_bound,
             self._upper_bound,
@@ -64,13 +96,21 @@ class Number(Integer):
 
 
 class String(GeneratableEntity):
-    def __init__(self, spec: spec.String) -> NoneType:
-        super().__init__(spec)
+    _spec: spec.String
+
+    def __init__(self, spec: spec.String, name: str | None = None) -> NoneType:
+        super().__init__(spec, name)
         self._lower_bound = self._spec.min_length or 1
         self._upper_bound = self._spec.max_length or 100
 
     def __call__(self, *args: Any, **kwds: Any) -> str:
         # TODO support formats
+
+        r = super().__call__(*args, **kwds)
+
+        if r:
+            return r
+
         allowed_letters = string.ascii_letters + string.digits + " "
         return "".join(
             random.choices(
@@ -91,6 +131,11 @@ class String(GeneratableEntity):
 
 class Boolean(GeneratableEntity):
     def __call__(self, *args: Any, **kwds: Any) -> bool:
+        r = super().__call__(*args, **kwds)
+
+        if r:
+            return r
+
         return random.choice([True, False])
 
     def is_valid(self, item: bool) -> bool:
@@ -106,35 +151,68 @@ class Null(GeneratableEntity):
 
 
 class Array(GeneratableEntity):
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return [
-            SCHEMA_MAP[type(self._spec.items)](self._spec.items)()
-            for i in range(
-                random.randint(
-                    self._spec.min_items or 0,
-                    self._spec.max_items or 100,
-                )
-            )
-        ]
+    _spec: spec.Array
+
+    def __call__(self, request: Request, cache: BaseCache, *args: Any, **kwds: Any) -> Any:
+        limit = random.randint(
+            self._spec.min_items or 0,
+            self._spec.max_items or 100,
+        )
+
+        key = CompositeCacheKey(
+            key=copy.deepcopy(request),
+            model=self._spec.items
+        )
+
+        obj = SCHEMA_MAP[type(self._spec.items)](self._spec.items)
+        if cache.has_by_model():
+            if len(cache.get_all_by_model(key)) < limit:
+                for _ in range(len(cache.get_all_by_model(key)), limit):
+                    obj(request, cache, read_from_cache=False)
+
+            items = cache.get_all_by_model(key)
+
+            return [
+                random.sample(list(items.values()), limit)
+            ]
+        else:
+            return [
+                obj(request, NO_CACHE) for _ in range(limit)
+            ]
 
     def is_valid(self, item: list[Any]) -> bool:
         return all([isinstance(x, self._spec.items) for x in item])
 
 
 class Object(GeneratableEntity):
-    def __init__(self, spec: spec.Object) -> NoneType:
-        super().__init__(spec)
+    def __init__(self, spec: spec.Object, name: str | None = None) -> NoneType:
+        super().__init__(spec, name)
+        self._cacheable = True
         self.properties: dict[str, Any] = {}
         self.required = set(spec.required)
         for prop in spec.properties:
-            self.properties[prop.name] = SCHEMA_MAP[type(prop.schema)](prop.schema)
+            self.properties[prop.name] = SCHEMA_MAP[type(prop.schema)](prop.schema, prop.name)
 
-    def __call__(self, *args: Any, **kwds: Any) -> dict[str, Any]:
+    def __call__(self, request: Request, cache: BaseCache, *args: Any, read_from_cache: bool = True, **kwds: Any) -> dict[str, Any]:
         res = {}
 
+        cache_key = CompositeCacheKey(
+            key=request,
+            model=self._spec,
+        )
+
+        if read_from_cache and cache.has(cache_key):
+            return cache.get(cache_key)
+
+        put_fields = dict()
         for prop in self.properties:
             if prop in self.required or random.choice([True, False]):
-                res[prop] = self.properties[prop]()
+                res[prop] = self.properties[prop](request, cache, *args, **kwds)
+                put_fields[prop] = str(res[prop])
+
+        cache_key.put_fields = frozendict(put_fields)
+
+        cache.put(cache_key, res)
 
         return res
 
@@ -152,21 +230,18 @@ class Object(GeneratableEntity):
         return res
 
 
-class OneOf(GeneratableEntity):
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        raise NotImplementedError
-
-
 class AnyOf(GeneratableEntity):
-    def __init__(self, spec: spec.Schema) -> NoneType:
-        super().__init__(spec)
+    _spec: spec.AnyOf
+
+    def __init__(self, spec: spec.AnyOf, name: str | None = None) -> NoneType:
+        super().__init__(spec, name)
         self._available_schemas = []
         for schema in self._spec.schemas:
             self._available_schemas.append(SCHEMA_MAP[type(schema)](schema))
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         schema = random.choice(self._available_schemas)
-        return schema()
+        return schema(*args, **kwds)
 
     def is_valid(self, item: Any) -> bool:
         res = False
@@ -175,6 +250,10 @@ class AnyOf(GeneratableEntity):
             res |= schema.is_valid(item)
 
         return res
+
+
+class OneOf(AnyOf):
+    pass
 
 
 SCHEMA_MAP = {
