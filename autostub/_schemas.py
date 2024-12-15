@@ -36,6 +36,9 @@ class GeneratableEntity:
     def is_valid(self, item: Any) -> bool:
         raise NotImplementedError
 
+    def from_val(self, val: Any) -> Any:
+        return val
+
 
 class Integer(GeneratableEntity):
     _spec: spec.Integer
@@ -67,12 +70,16 @@ class Integer(GeneratableEntity):
             self._upper_bound,
         )
 
-    def is_valid(self, item: int) -> bool:
+    def is_valid(self, item: int | str) -> bool:
         try:
             item = int(item)
         except ValueError:
             return False
         return self._lower_bound <= item <= self._upper_bound
+
+    def from_val(self, val: str) -> int:
+        assert self.is_valid(val)
+        return int(val)
 
 
 class Number(Integer):
@@ -93,6 +100,10 @@ class Number(Integer):
         except ValueError:
             return False
         return self._lower_bound <= converted <= self._upper_bound
+
+    def from_val(self, val: str) -> float:
+        assert self.is_valid(val)
+        return float(val)
 
 
 class String(GeneratableEntity):
@@ -193,11 +204,23 @@ class Object(GeneratableEntity):
         for prop in spec.properties:
             self.properties[prop.name] = SCHEMA_MAP[type(prop.schema)](prop.schema, prop.name)
 
+    def _transform_parameters(self, q_params: frozendict[str, str]) -> frozendict[str, Any]:
+        result = {}
+        for name, val in q_params.items():
+            if name in self.properties:
+                result[name] = self.properties[name].from_val(val)
+            else:
+                result[name] = val
+        return frozendict(result)
+
     def __call__(self, request: Request, cache: BaseCache, *args: Any, read_from_cache: bool = True, **kwds: Any) -> dict[str, Any]:
         res = {}
 
+        inner_req = copy.deepcopy(request)
+        inner_req.query_params = self._transform_parameters(inner_req.query_params)
+
         cache_key = CompositeCacheKey(
-            key=request,
+            key=inner_req,
             model=self._spec,
         )
 
@@ -207,7 +230,7 @@ class Object(GeneratableEntity):
         put_fields = dict()
         for prop in self.properties:
             if prop in self.required or random.choice([True, False]):
-                res[prop] = self.properties[prop](request, cache, *args, **kwds)
+                res[prop] = self.properties[prop](inner_req, cache, *args, **kwds)
                 put_fields[prop] = str(res[prop])
 
         cache_key.put_fields = frozendict(put_fields)

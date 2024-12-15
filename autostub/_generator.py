@@ -171,6 +171,15 @@ class Get(_BaseEntity):
 
         return frozendict.frozendict(query_params)
 
+    def _transform_parameters(self, q_params: frozendict.frozendict[str, str]) -> frozendict.frozendict[str, Any]:
+        result = {}
+        for name, val in q_params.items():
+            if name in self._parameters:
+                result[name] = self._parameters[name].from_val(val)
+            else:
+                result[name] = val
+        return frozendict.frozendict(result)
+
     def _validate_call(self, request: Request) -> bool:
         query_params = self._get_query_params(request)
 
@@ -187,15 +196,14 @@ class Get(_BaseEntity):
     def __call__(self, request: Request) -> _BaseHTTPResponse | None:
         # TODO send a default response if whatever goes wrong, and a random other if anything is ok
         response = None
-        # TODO: transform request params to correct values according to schemas
         if self._validate_call(request):
             response = random.choice(self._responses)
         else:
             if not self._default_response:
                 return None
-            response = self._default_response
+            return self._default_response(request)
 
-        request.query_params = self._get_query_params(request)
+        request.query_params = self._transform_parameters(self._get_query_params(request))
         return response(request)
 
 
