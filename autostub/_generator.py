@@ -2,40 +2,42 @@ from typing import Any, Optional
 import random
 import urllib.parse
 
-import requests
 import http
 import openapi_parser.specification as specification
+import frozendict
 
+from autostub._cache import BaseCache, NO_CACHE
 from autostub._schemas import SCHEMA_MAP
-from autostub._response import JsonHTTPResponse
+from autostub._response import JsonHTTPResponse, _BaseHTTPResponse
+from autostub._request import Request
 
 
 class _BaseEntity:
-    def __init__(self, spec: Any) -> None:
+    def __init__(self, spec: Any, cache: BaseCache) -> None:
         self._spec = spec
-        pass
+        self._cache = cache
 
-    def __call__(
-        self, method: str, url: str, **kwds: Any
-    ) -> Optional[requests.Response]:
+    def __call__(self, request: Request) -> Optional[_BaseHTTPResponse]:
         raise NotImplementedError
 
-    def _validate_call(self, method: str, url: str, **kwds: Any) -> bool:
+    def _validate_call(self, request: Request) -> bool:
         raise NotImplementedError
 
 
 class OAPISpec(_BaseEntity):
     # Check if suitable server exists in spec.
     # Route to path if any is available
-    def __init__(self, spec: specification.Specification) -> None:
-        super().__init__(spec)
-        self._paths = {i.url: Path(i) for i in spec.paths}
+    def __init__(self, spec: specification.Specification, cache: BaseCache) -> None:
+        super().__init__(spec, cache)
+        self._cache = cache
+        self._paths = {i.url: Path(i, cache) for i in spec.paths}
 
         self._servers = [i.url for i in spec.servers]
+        self._models = spec.schemas
 
     def _compare_and_parse_paths(
         self, p_requested: str, p_internal: str
-    ) -> Optional[dict[str, str]]:
+    ) -> Optional[frozendict.frozendict[str, str]]:
         split_requested_path = p_requested.split("/")
         split_internal_path = p_internal.split("/")
 
@@ -54,7 +56,7 @@ class OAPISpec(_BaseEntity):
                     continue
 
                 return None
-        return result
+        return frozendict.frozendict(result)
 
     def _get_path_candidates(self, url: str) -> list[str]:
         res = []
@@ -76,27 +78,25 @@ class OAPISpec(_BaseEntity):
 
         return result
 
-    def _validate_call(self, method: str, url: str, **kwds: Any) -> bool:
-        if not any([url.startswith(i) for i in self._servers]):
+    def _validate_call(self, request: Request) -> bool:
+        if not any([request.url.startswith(i) for i in self._servers]):
             return False
 
-        if not self._get_valid_paths(url):
+        if not self._get_valid_paths(request.url):
             return False
 
         return True
 
-    def __call__(
-        self, method: str, url: str, **kwds: Any
-    ) -> JsonHTTPResponse | None:
-        if not self._validate_call(method, url, **kwds):
+    def __call__(self, request: Request) -> _BaseHTTPResponse | None:
+        if not self._validate_call(request):
             return None
 
         responses = []
 
-        for path, ipath in self._get_valid_paths(url):
+        for path, ipath in self._get_valid_paths(request.url):
             # TODO use candidates function
-            path_params = self._compare_and_parse_paths(path, ipath)
-            response = self._paths[ipath](method, url, path_params=path_params, **kwds)
+            request.path_params = self._compare_and_parse_paths(path, ipath)
+            response = self._paths[ipath](request)
             if response is not None:
                 responses.append(response)
 
@@ -109,30 +109,28 @@ class OAPISpec(_BaseEntity):
 
 class Path(_BaseEntity):
     # Check if specific method of this path exists.
-    def __init__(self, spec: specification.Path) -> None:
-        super().__init__(spec)
+    def __init__(self, spec: specification.Path, cache: BaseCache) -> None:
+        super().__init__(spec, cache)
 
         self._ops = {}
         for item in spec.operations:
             if item.method == specification.OperationMethod.GET:
-                self._ops["get"] = Get(item)
+                self._ops["get"] = Get(item, cache)
 
-    def _validate_call(self, method: str, url: str, **kwds: Any) -> bool:
-        return method in self._ops
+    def _validate_call(self, request: Request) -> bool:
+        return request.method in self._ops
 
-    def __call__(
-        self, method: str, url: str, **kwds: Any
-    ) -> Optional[requests.Response]:
-        if self._validate_call(method, url, **kwds):
-            return self._ops[method](method, url, **kwds)
+    def __call__(self, request: Request) -> _BaseHTTPResponse | None:
+        if self._validate_call(request):
+            return self._ops[request.method](request)
 
         return None
 
 
 class Get(_BaseEntity):
     # Check parameters in query (i.e ?param1=foo&param2=bar)
-    def __init__(self, spec: specification.Operation) -> None:
-        super().__init__(spec)
+    def __init__(self, spec: specification.Operation, cache: BaseCache) -> None:
+        super().__init__(spec, cache)
         self._responses = []
         self._default_response = None
         self._parameters = {}
@@ -143,7 +141,7 @@ class Get(_BaseEntity):
                 specification.ParameterLocation.PATH,
             }:
                 self._parameters[param.name] = SCHEMA_MAP[type(param.schema)](
-                    param.schema
+                    param.schema, param.name
                 )
                 if param.required:
                     self._required.add(param.name)
@@ -154,7 +152,7 @@ class Get(_BaseEntity):
 
             obj = None
             if resp.content[0].type == specification.ContentType.JSON:
-                obj = JSONResponse(resp)
+                obj = JSONResponse(resp, cache)
 
             if obj is None:
                 continue
@@ -164,12 +162,26 @@ class Get(_BaseEntity):
             else:
                 self._responses.append(obj)
 
-    def _validate_call(self, method: str, url: str, **kwds: Any) -> bool:
-        parsed_url = urllib.parse.urlparse(url)
+    def _get_query_params(self, request: Request) -> frozendict.frozendict[str, str]:
+        parsed_url = urllib.parse.urlparse(request.url)
 
         query_params = dict(urllib.parse.parse_qsl(parsed_url.query))
 
-        query_params.update(kwds.get("path_params", {}))
+        query_params.update(request.path_params or {})
+
+        return frozendict.frozendict(query_params)
+
+    def _transform_parameters(self, q_params: frozendict.frozendict[str, str]) -> frozendict.frozendict[str, Any]:
+        result = {}
+        for name, val in q_params.items():
+            if name in self._parameters:
+                result[name] = self._parameters[name].from_val(val)
+            else:
+                result[name] = val
+        return frozendict.frozendict(result)
+
+    def _validate_call(self, request: Request) -> bool:
+        query_params = self._get_query_params(request)
 
         if self._required & set(query_params.keys()) != self._required:
             return False
@@ -181,38 +193,38 @@ class Get(_BaseEntity):
 
         return True
 
-    def __call__(
-        self, method: str, url: str, **kwds: Any
-    ) -> JsonHTTPResponse:
+    def __call__(self, request: Request) -> _BaseHTTPResponse | None:
         # TODO send a default response if whatever goes wrong, and a random other if anything is ok
-        if self._validate_call(method, url, **kwds):
-            return random.choice(self._responses)(method, url, **kwds)
+        response = None
+        if self._validate_call(request):
+            response = random.choice(self._responses)
         else:
-            return self._default_response(method, url, **kwds)
+            if not self._default_response:
+                return None
+            return self._default_response(request)
+
+        request.query_params = self._transform_parameters(self._get_query_params(request))
+        return response(request)
 
 
 class JSONResponse(_BaseEntity):
-    def __init__(self, spec: specification.Response) -> None:
-        super().__init__(spec)
+    def __init__(self, spec: specification.Response, cache: BaseCache) -> None:
+        super().__init__(spec, cache)
 
-    def __call__(
-        self, method: str, url: str, **kwds: Any
-    ) -> JsonHTTPResponse:
+    def __call__(self, request: Request) -> JsonHTTPResponse:
         res = JsonHTTPResponse()
         res.status_code = self._spec.code or http.HTTPStatus.NOT_FOUND.value
 
-        cont = self._spec.content[0]
+        cont: specification.Content = self._spec.content[0]
 
         assert cont.type == specification.ContentType.JSON
 
-        data = SCHEMA_MAP[type(cont.schema)](cont.schema)()
+        data = SCHEMA_MAP[type(cont.schema)](cont.schema)(request, self._cache)
 
         res.content = data
 
         for header in self._spec.headers:
             if random.choice([True, header.required]):
-                res.headers[header.name] = SCHEMA_MAP[type(header.schema)](
-                    header.schema
-                )()
+                res.headers[header.name] = SCHEMA_MAP[type(header.schema)](header.schema, header.name)(request, NO_CACHE)
 
         return res

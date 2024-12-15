@@ -1,22 +1,23 @@
-from typing import Any, Callable
+from typing import Any
 import importlib
 import collections
 
 from autostub._generator import OAPISpec
+from autostub._cache import CachingLevel, CacheFactory
 import openapi_parser as oapi_parser
 
 import pytest
 import pytest_mock
 
 
-SUPPORTED_MODULES = {
-    "requests": "autostub.adapters.requests"
-}
+SUPPORTED_MODULES = {"requests": "autostub.adapters.requests"}
 
 
 class AutoStub:
     def __init__(self, config: Any) -> None:
-        self._servers: collections.defaultdict[str, dict[str, OAPISpec]] = collections.defaultdict(dict)
+        self._servers: collections.defaultdict[str, dict[str, OAPISpec]] = (
+            collections.defaultdict(dict)
+        )
         self._config = config
         self._mock: dict[str, pytest_mock.MockType | None] = {}
         self._mocker = pytest_mock.MockFixture(self._config)
@@ -29,7 +30,7 @@ class AutoStub:
         for m_name, path in SUPPORTED_MODULES.items():
             try:
                 module = importlib.import_module(path)
-                adapter = getattr(module, 'ADAPTER_MAP')
+                adapter = getattr(module, "ADAPTER_MAP")
             except ImportError:
                 continue
             else:
@@ -50,16 +51,20 @@ class AutoStub:
     def _create_mock(self, module: str | None = None):
         self._stop_mock_if_needed(module)
         if module:
-            replace_name = self.adapters_map[module]['replace_name']
-            replace_with = self._generate_mock(module, self.adapters_map[module]['replace_with'])
+            replace_name = self.adapters_map[module]["replace_name"]
+            replace_with = self._generate_mock(
+                module, self.adapters_map[module]["replace_with"]
+            )
             self._mock[module] = self._mocker.patch(replace_name, new=replace_with)
         return self._mock
 
-    def stub(self, oapi_spec: str, module: str):
+    def stub(self, oapi_spec: str, module: str, caching_level: CachingLevel):
         """
         Generate requests.get stub and patch the function
         """
-        self._servers[module][oapi_spec] = OAPISpec(oapi_parser.parse(oapi_spec))
+        self._servers[module][oapi_spec] = OAPISpec(
+            oapi_parser.parse(oapi_spec), CacheFactory.get_cache(caching_level)
+        )
         return self._create_mock(module)
 
     def unstub(self, oapi_spec: str, module):
