@@ -62,8 +62,9 @@ class AutoStub:
         """
         Generate requests.get stub and patch the function
         """
+        spec = oapi_parser.parse(oapi_spec)
         self._servers[module][oapi_spec] = OAPISpec(
-            oapi_parser.parse(oapi_spec), CacheFactory.get_cache(caching_level)
+            spec, CacheFactory.get_cache(caching_level, spec.schemas)
         )
         return self._create_mock(module)
 

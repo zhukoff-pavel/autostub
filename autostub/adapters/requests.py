@@ -34,15 +34,11 @@ class RequestsAdapter(BaseAdapter):
         headers = frozendict.frozendict(kwargs.get("headers", {}))
         return Request(url, method, body, params, headers)
 
-    @staticmethod
-    def mock(servers, *args, **kwargs) -> requests.Response:
-        response = None
-        request = RequestsAdapter.to_request(*args, **kwargs)
-        for s in servers.values():
-            response = s(request)
-            print(response)
-            if response is not None:
-                return RequestsAdapter.from_response(response)
+    @classmethod
+    def mock(cls, servers, *args, **kwargs) -> requests.Response:
+        inner_result = super().mock(servers, *args, **kwargs)
+        if inner_result:
+            return inner_result
 
         return requests.request(*args, **kwargs)
 

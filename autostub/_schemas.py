@@ -231,7 +231,7 @@ class Object(GeneratableEntity):
         for prop in self.properties:
             if prop in self.required or random.choice([True, False]):
                 res[prop] = self.properties[prop](inner_req, cache, *args, **kwds)
-                put_fields[prop] = str(res[prop])
+                put_fields[prop] = res[prop]
 
         cache_key.put_fields = frozendict(put_fields)
 
