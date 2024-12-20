@@ -18,7 +18,9 @@ class RequestsAdapter(BaseAdapter):
         r = requests.Response()
 
         r.status_code = resp.status_code
-        r.raw = io.BytesIO(json.dumps(resp.content).encode())
+        
+        r.encoding = resp.encoding
+        r.raw = io.BytesIO(json.dumps(resp.content).encode(r.encoding))
 
         for k, v in resp.headers.items():
             r.headers[k] = v
