@@ -168,6 +168,7 @@ class Get(_BaseEntity):
         query_params = dict(urllib.parse.parse_qsl(parsed_url.query))
 
         query_params.update(request.path_params or {})
+        query_params.update(request.parameters or {})
 
         return frozendict.frozendict(query_params)
 

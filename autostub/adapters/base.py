@@ -16,6 +16,12 @@ class BaseAdapter:
     def to_request(*args, **kwargs) -> Request:
         raise NotImplementedError
 
-    @staticmethod
-    def mock(servers, *args, **kwargs) -> tp.Any:
-        raise NotImplementedError
+    @classmethod
+    def mock(cls, servers, *args, **kwargs) -> tp.Any:
+        response = None
+        request = cls.to_request(*args, **kwargs)
+        for s in servers.values():
+            response = s(request)
+            print(response)
+            if response is not None:
+                return cls.from_response(response)
