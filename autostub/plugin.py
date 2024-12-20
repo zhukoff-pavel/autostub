@@ -38,7 +38,7 @@ class AutoStub:
         return a_map
 
     def _stop_mock_if_needed(self, module):
-        if self._mock[module] is not None:
+        if self._mock.get(module):
             self._mocker.stop(self._mock[module])
             self._mock[module] = None
 

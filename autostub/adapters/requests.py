@@ -18,7 +18,7 @@ class RequestsAdapter(BaseAdapter):
         r = requests.Response()
 
         r.status_code = resp.status_code
-        
+
         r.encoding = resp.encoding
         r.raw = io.BytesIO(json.dumps(resp.content).encode(r.encoding))
 
@@ -31,9 +31,9 @@ class RequestsAdapter(BaseAdapter):
     def to_request(*args, **kwargs) -> Request:
         method = kwargs.get("method") or args[0]
         url = (kwargs.get("url") or args[1]).lower()
-        params = frozendict.frozendict(kwargs.get("params", {}))
-        body = frozendict.frozendict(kwargs.get("data", {}))
-        headers = frozendict.frozendict(kwargs.get("headers", {}))
+        params = frozendict.frozendict(kwargs.get("params") or {})
+        body = frozendict.frozendict(kwargs.get("data") or {})
+        headers = frozendict.frozendict(kwargs.get("headers") or {})
         return Request(url, method, body, params, headers)
 
     @classmethod
@@ -46,6 +46,6 @@ class RequestsAdapter(BaseAdapter):
 
 
 ADAPTER_MAP = {
-    "replace_name": "requests.api.requests",  # XXX
+    "replace_name": "requests.api.request",  # XXX
     "replace_with": RequestsAdapter.mock,
 }
