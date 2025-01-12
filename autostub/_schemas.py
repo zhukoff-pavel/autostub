@@ -20,7 +20,7 @@ class GeneratableEntity:
         self._cacheable = False
         self._name = name
 
-    def __call__(self, request: Request, cache: BaseCache) -> Any:
+    def _read_cache(self, request: Request, cache: BaseCache) -> Any:
         if self._cacheable:
             key = CompositeCacheKey(
                 key=request,
@@ -32,6 +32,9 @@ class GeneratableEntity:
             if self._name and self._name in request.query_params:
                 return request.query_params[self._name]
         return None
+
+    def __call__(self, request: Request, cache: BaseCache) -> Any:
+        return self._read_cache(request, cache)
 
     def is_valid(self, item: Any) -> bool:
         raise NotImplementedError
@@ -55,12 +58,12 @@ class Integer(GeneratableEntity):
         if self._spec.maximum is not None:
             self._upper_bound = self._spec.maximum
         elif self._spec.exclusive_maximum is not None:
-            self._upper_bound = self._spec.exclusive_maximum + 1
+            self._upper_bound = self._spec.exclusive_maximum - 1
         else:
             self._upper_bound = sys.maxsize
 
     def __call__(self, *args: Any, **kwds: Any) -> int:
-        r = super().__call__(*args, **kwds)
+        r = super()._read_cache(*args, **kwds)
 
         if r:
             return r
@@ -84,7 +87,7 @@ class Integer(GeneratableEntity):
 
 class Number(Integer):
     def __call__(self, *args: Any, **kwds: Any) -> float:
-        r = super().__call__(*args, **kwds)
+        r = super()._read_cache(*args, **kwds)
 
         if r:
             return r
@@ -117,7 +120,7 @@ class String(GeneratableEntity):
     def __call__(self, *args: Any, **kwds: Any) -> str:
         # TODO support formats
 
-        r = super().__call__(*args, **kwds)
+        r = super()._read_cache(*args, **kwds)
 
         if r:
             return r
@@ -142,7 +145,7 @@ class String(GeneratableEntity):
 
 class Boolean(GeneratableEntity):
     def __call__(self, *args: Any, **kwds: Any) -> bool:
-        r = super().__call__(*args, **kwds)
+        r = super()._read_cache(*args, **kwds)
 
         if r:
             return r
