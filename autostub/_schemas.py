@@ -13,7 +13,6 @@ import sys
 import string
 
 
-
 class GeneratableEntity:
     def __init__(self, spec: spec.Schema, name: str | None = None) -> None:
         self._spec = spec
@@ -22,10 +21,7 @@ class GeneratableEntity:
 
     def _read_cache(self, request: Request, cache: BaseCache) -> Any:
         if self._cacheable:
-            key = CompositeCacheKey(
-                key=request,
-                model=self._spec
-            )
+            key = CompositeCacheKey(key=request, model=self._spec)
             if cache.has(key):
                 return cache.get(key)
         else:
@@ -167,16 +163,15 @@ class Null(GeneratableEntity):
 class Array(GeneratableEntity):
     _spec: spec.Array
 
-    def __call__(self, request: Request, cache: BaseCache, *args: Any, **kwds: Any) -> Any:
+    def __call__(
+        self, request: Request, cache: BaseCache, *args: Any, **kwds: Any
+    ) -> Any:
         limit = random.randint(
             self._spec.min_items or 0,
             self._spec.max_items or 100,
         )
 
-        key = CompositeCacheKey(
-            key=copy.deepcopy(request),
-            model=self._spec.items
-        )
+        key = CompositeCacheKey(key=copy.deepcopy(request), model=self._spec.items)
 
         obj = SCHEMA_MAP[type(self._spec.items)](self._spec.items)
         if cache.has_by_model():
@@ -186,13 +181,11 @@ class Array(GeneratableEntity):
 
             items = cache.get_all_by_model(key)
 
-            return [
-                random.sample(list(items.values()), limit)
-            ]
+            return [random.sample(list(items.values()), limit)]
         else:
-            return [
-                obj(request, NO_CACHE) for _ in range(limit)
-            ]
+            r = [obj(request, NO_CACHE) for _ in range(limit)]
+            cache.put(key, r)
+            return r
 
     def is_valid(self, item: list[Any]) -> bool:
         return all([isinstance(x, self._spec.items) for x in item])
@@ -205,9 +198,13 @@ class Object(GeneratableEntity):
         self.properties: dict[str, Any] = {}
         self.required = set(spec.required)
         for prop in spec.properties:
-            self.properties[prop.name] = SCHEMA_MAP[type(prop.schema)](prop.schema, prop.name)
+            self.properties[prop.name] = SCHEMA_MAP[type(prop.schema)](
+                prop.schema, prop.name
+            )
 
-    def _transform_parameters(self, q_params: frozendict[str, str]) -> frozendict[str, Any]:
+    def _transform_parameters(
+        self, q_params: frozendict[str, str]
+    ) -> frozendict[str, Any]:
         result = {}
         for name, val in q_params.items():
             if name in self.properties:
@@ -216,7 +213,14 @@ class Object(GeneratableEntity):
                 result[name] = val
         return frozendict(result)
 
-    def __call__(self, request: Request, cache: BaseCache, *args: Any, read_from_cache: bool = True, **kwds: Any) -> dict[str, Any]:
+    def __call__(
+        self,
+        request: Request,
+        cache: BaseCache,
+        *args: Any,
+        read_from_cache: bool = True,
+        **kwds: Any
+    ) -> dict[str, Any]:
         res = {}
 
         inner_req = copy.deepcopy(request)

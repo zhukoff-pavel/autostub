@@ -172,7 +172,9 @@ class Get(_BaseEntity):
 
         return frozendict.frozendict(query_params)
 
-    def _transform_parameters(self, q_params: frozendict.frozendict[str, str]) -> frozendict.frozendict[str, Any]:
+    def _transform_parameters(
+        self, q_params: frozendict.frozendict[str, str]
+    ) -> frozendict.frozendict[str, Any]:
         result = {}
         for name, val in q_params.items():
             if name in self._parameters:
@@ -204,7 +206,9 @@ class Get(_BaseEntity):
                 return None
             return self._default_response(request)
 
-        request.query_params = self._transform_parameters(self._get_query_params(request))
+        request.query_params = self._transform_parameters(
+            self._get_query_params(request)
+        )
         return response(request)
 
 
@@ -226,6 +230,8 @@ class JSONResponse(_BaseEntity):
 
         for header in self._spec.headers:
             if random.choice([True, header.required]):
-                res.headers[header.name] = SCHEMA_MAP[type(header.schema)](header.schema, header.name)(request, NO_CACHE)
+                res.headers[header.name] = SCHEMA_MAP[type(header.schema)](
+                    header.schema, header.name
+                )(request, NO_CACHE)
 
         return res
