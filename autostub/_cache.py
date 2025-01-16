@@ -17,12 +17,14 @@ class CachingLevel(enum.Enum):
 
 class CacheFactory:
     @staticmethod
-    def get_cache(cache_level: CachingLevel, models: dict[str, specification.Schema] | None = None):
+    def get_cache(
+        cache_level: CachingLevel, models: dict[str, specification.Schema] | None = None
+    ):
         match cache_level:
             case CachingLevel.NONE:
                 return DummyCache()
             case CachingLevel.BASIC:
-                return SimpleCache()
+                return RequestCache()
             case CachingLevel.ADVANCED:
                 assert models, "Models are required to be set in OAPI spec"
                 return CompositeCache(models)
@@ -76,7 +78,7 @@ class BaseCache:
 
 class DummyCache(BaseCache):
     def __init__(self) -> None:
-        pass
+        super().__init__()
 
     def has(self, key: AcceptableKeys) -> bool:
         return False
@@ -105,7 +107,10 @@ class SimpleCache(BaseCache):
 
 
 class RequestCache(SimpleCache):
-    def _resolve_key(self, key: RequestCacheKey) -> CacheKey:
+    def _resolve_key(self, key: RequestCacheKey | CacheKey) -> CacheKey:
+        if isinstance(key, CacheKey) and not isinstance(key, RequestCacheKey):
+            return key
+
         return CacheKey(
             key=frozendict(
                 url=key.key.url,
