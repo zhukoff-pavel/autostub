@@ -25,7 +25,8 @@ classifiers = [
 ]
 dependencies = [
     "openapi3-parser>=1.1.17",
-    "pytest>=8.2.1"
+    "pytest>=8.2.1",
+    "frozendict>=2.4.6",
 ]
 
 [project.optional-dependencies]
