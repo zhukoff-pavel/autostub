@@ -166,6 +166,9 @@ class ModelCache(SimpleCache):
             if set(key.items()) & set(storage_key.items()) == set(key.items()):
                 candidates.append(value)
 
+        if not candidates:
+            return None
+
         return random.choice(candidates)
 
     def __init__(self, model_description: specification.Object | None) -> None:
@@ -181,7 +184,7 @@ class ModelCache(SimpleCache):
         return self._search_by_part(self._resolve_key(key)) is not None
 
     def put(self, key: ModelCacheKey, value: tp.Any):
-        self._storage[self._resolve_key(key)] = value
+        super().put(CacheKey(key=self._resolve_key(key)), value)
 
     def get(self, key: ModelCacheKey):
         return self._search_by_part(self._resolve_key(key))

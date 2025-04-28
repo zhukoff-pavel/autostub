@@ -1,11 +1,18 @@
 import pathlib
+import pytest
 import requests
 import io
 
 import autostub._cache as cache
 from autostub.plugin import AutoStub
 
-TEST_DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
+
+@pytest.fixture
+def data_dir():
+    res = pathlib.Path(__file__).resolve().parent / "data"
+    assert res.exists()
+
+    return res
 
 
 def get_bad_response():
@@ -16,13 +23,16 @@ def get_bad_response():
     return r
 
 
-def test_requests_mock():
+@pytest.mark.parametrize(
+    "cache_level", [i for i in cache.CachingLevel]
+)
+def test_requests_mock(data_dir, cache_level):
     plugin = AutoStub(config=None)
 
     plugin.stub(
-        oapi_spec=str(TEST_DATA_DIR / "oapi_spec.yaml"),
+        oapi_spec=str(data_dir / "oapi_spec.yaml"),
         module="requests",
-        caching_level=cache.CachingLevel.NONE,
+        caching_level=cache_level,
     )
 
     result = requests.get(url="http://petstore.swagger.io/v1/pets/1")
@@ -34,15 +44,18 @@ def test_requests_mock():
     assert item["id"] == 1
 
 
-def test_requests_mock_fallback(mocker):
+@pytest.mark.parametrize(
+    "cache_level", [i for i in cache.CachingLevel]
+)
+def test_requests_mock_fallback(mocker, data_dir, cache_level):
     mock = mocker.patch("requests.request", return_value=get_bad_response())
 
     plugin = AutoStub(config=None)
 
     plugin.stub(
-        oapi_spec=str(TEST_DATA_DIR / "oapi_spec.yaml"),
+        oapi_spec=str(data_dir / "oapi_spec.yaml"),
         module="requests",
-        caching_level=cache.CachingLevel.NONE,
+        caching_level=cache_level,
     )
 
     result = requests.get(url="http://petstore.swagger.io/v1/not_pets/1")

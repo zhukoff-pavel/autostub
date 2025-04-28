@@ -1,0 +1,40 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+    "setuptools>=61",
+    "setuptools-scm[toml]>=6.2.3",
+]
+
+[project]
+name = "autostub"
+version = "0.0.1"
+description = "autostub: Automatic web-service stubs and mocks creation based on their OpenAPI-specification"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Pavel Zhukov" },
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Testing :: Mocking",
+    "Framework :: Pytest",
+]
+dependencies = [
+    "openapi3-parser>=1.1.17",
+    "pytest>=8.2.1"
+]
+
+[project.optional-dependencies]
+requests = ["requests"]
+
+
+[project.entry-points.pytest11]
+autostub = "autostub.plugin"
+
+
+[tool.setuptools.packages.find]
+include = ["autostub*"]

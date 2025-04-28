@@ -13,3 +13,4 @@ class _BaseHTTPResponse:
 
 class JsonHTTPResponse(_BaseHTTPResponse):
     content_type = "application/json"
+    content: dict[str, str] = dataclasses.field(default_factory=dict)
