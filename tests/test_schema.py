@@ -1,6 +1,7 @@
 import sys
 import copy
 import string
+from types import NoneType
 import frozendict
 
 import pytest
@@ -221,5 +222,82 @@ class TestBoolean(BaseTest):
     )
     def test_validate(self, value, expected):
         schema = schemas.Boolean(self.base_spec, "bool")
+
+        assert schema.is_valid(value) == expected
+
+
+class TestAnyOf(BaseTest):
+
+    @classmethod
+    def setup_class(cls):
+        super().setup_class()
+
+        specs = [
+            oapi_spec.Boolean(type="bool"),
+            oapi_spec.Null(type="null")
+        ]
+        cls.base_spec = oapi_spec.AnyOf(type="anyof", schemas=specs)
+
+    def test_generate(self):
+        schema = schemas.AnyOf(self.base_spec, "anyof")
+
+        res = schema(self.dummy_request, self.dummy_cache)
+
+        assert isinstance(res, (bool, NoneType))
+
+        if isinstance(res, bool):
+            assert res in [True, False]
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        (
+            (2, False),
+            ("bar", False),
+            (False, True),
+            (True, True),
+            (None, True)
+        ),
+    )
+    def test_validate(self, value, expected):
+        schema = schemas.AnyOf(self.base_spec, "anyof")
+
+        assert schema.is_valid(value) == expected
+
+
+class TestObject(BaseTest):
+    @classmethod
+    def setup_class(cls):
+        super().setup_class()
+
+        cls.base_spec = oapi_spec.Object(
+            type="object",
+            properties=[
+                oapi_spec.Property(name="foo", schema=oapi_spec.String(type="string")),
+                oapi_spec.Property(name="bar", schema=oapi_spec.Integer(type="integer")),
+            ],
+            required=["foo"],
+        )
+
+    def test_generate(self):
+        schema = schemas.Object(self.base_spec, "object")
+
+        res = schema(self.dummy_request, self.dummy_cache)
+
+        assert isinstance(res, dict)
+        assert "foo" in res
+
+        if "bar" in res:
+            assert isinstance(res["bar"], int)
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        (
+            ({"foo": "bar"}, True),
+            ({"foo": "bar", "bar": 1}, True),
+            ({"bar": 1}, False),
+        ),
+    )
+    def test_validate(self, value, expected):
+        schema = schemas.Object(self.base_spec, "object")
 
         assert schema.is_valid(value) == expected

@@ -111,6 +111,8 @@ class TestAdvancedCache:
         )
         assert model_store.has(key)
 
+        assert model_store.get(key) == res1.content
+
     def test_req_returning_multiple(self):
         cache_instance = cache.CompositeCache(
             oapi_parser.parse(str(TEST_DATA_DIR / "oapi_spec.yaml")).schemas
@@ -135,3 +137,5 @@ class TestAdvancedCache:
                 )
 
                 assert model_store.has(key)
+
+                assert pet_entry == model_store.get(key)

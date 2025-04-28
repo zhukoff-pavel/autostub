@@ -32,7 +32,7 @@ class AutoStub:
                 module = importlib.import_module(path)
                 adapter = getattr(module, "ADAPTER_MAP")
             except ImportError:
-                continue
+                raise Exception(f"Adapter for {m_name} not found")
             else:
                 a_map[m_name] = adapter
         return a_map
