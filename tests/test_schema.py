@@ -232,10 +232,7 @@ class TestAnyOf(BaseTest):
     def setup_class(cls):
         super().setup_class()
 
-        specs = [
-            oapi_spec.Boolean(type="bool"),
-            oapi_spec.Null(type="null")
-        ]
+        specs = [oapi_spec.Boolean(type="bool"), oapi_spec.Null(type="null")]
         cls.base_spec = oapi_spec.AnyOf(type="anyof", schemas=specs)
 
     def test_generate(self):
@@ -250,13 +247,7 @@ class TestAnyOf(BaseTest):
 
     @pytest.mark.parametrize(
         "value,expected",
-        (
-            (2, False),
-            ("bar", False),
-            (False, True),
-            (True, True),
-            (None, True)
-        ),
+        ((2, False), ("bar", False), (False, True), (True, True), (None, True)),
     )
     def test_validate(self, value, expected):
         schema = schemas.AnyOf(self.base_spec, "anyof")
@@ -273,7 +264,9 @@ class TestObject(BaseTest):
             type="object",
             properties=[
                 oapi_spec.Property(name="foo", schema=oapi_spec.String(type="string")),
-                oapi_spec.Property(name="bar", schema=oapi_spec.Integer(type="integer")),
+                oapi_spec.Property(
+                    name="bar", schema=oapi_spec.Integer(type="integer")
+                ),
             ],
             required=["foo"],
         )
