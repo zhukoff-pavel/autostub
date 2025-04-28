@@ -219,7 +219,7 @@ class Object(GeneratableEntity):
         cache: BaseCache,
         *args: Any,
         read_from_cache: bool = True,
-        **kwds: Any
+        **kwds: Any,
     ) -> dict[str, Any]:
         res = {}
 

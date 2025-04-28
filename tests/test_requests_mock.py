@@ -23,9 +23,7 @@ def get_bad_response():
     return r
 
 
-@pytest.mark.parametrize(
-    "cache_level", [i for i in cache.CachingLevel]
-)
+@pytest.mark.parametrize("cache_level", [i for i in cache.CachingLevel])
 def test_requests_mock(data_dir, cache_level):
     plugin = AutoStub(config=None)
 
@@ -44,9 +42,7 @@ def test_requests_mock(data_dir, cache_level):
     assert item["id"] == 1
 
 
-@pytest.mark.parametrize(
-    "cache_level", [i for i in cache.CachingLevel]
-)
+@pytest.mark.parametrize("cache_level", [i for i in cache.CachingLevel])
 def test_requests_mock_fallback(mocker, data_dir, cache_level):
     mock = mocker.patch("requests.request", return_value=get_bad_response())
 
